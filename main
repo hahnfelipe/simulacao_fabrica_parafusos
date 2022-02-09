@@ -1,0 +1,215 @@
+# Fazendo a autenticação com o google sheets
+from google.colab import auth
+import gspread
+from oauth2client.client import GoogleCredentials
+
+auth.authenticate_user()
+gc = gspread.authorize(GoogleCredentials.get_application_default())
+
+
+# Criando a simulação da fábrica de parafusos
+import numpy as np
+import time
+import random
+!pip install gspread_formatting
+from gspread_formatting import *
+
+planilha = gc.open('DP')
+pagina = planilha.get_worksheet(0)
+
+format_cell_range(
+        pagina, 'H3:J3',
+        cellFormat(backgroundColor=color(1, 1, 1), ) 
+        )
+
+tempo_simulacao = 600
+
+# setar as vendas para 0
+pagina.update_acell('J13', 0)
+pagina.update_acell('H13', 0)
+
+# setar as faltas para 0
+pagina.update_acell('M13', 0)
+pagina.update_acell('P13', 0)
+
+# setar a produção para 0
+pagina.update_acell('D13', 0)
+pagina.update_acell('F13', 0)
+
+# setar o total da produção para 0
+pagina.update_acell('G21', 0)
+pagina.update_acell('H21', 0)
+
+# setar o total de faltas para 0
+pagina.update_acell('G22', 0)
+pagina.update_acell('H22', 0)
+
+# setar o total de vendas para 0
+pagina.update_acell('G23', 0)
+pagina.update_acell('H23', 0)
+
+# setar o nivel de serviço para 0
+pagina.update_acell('G24', 1)
+pagina.update_acell('H24', 1)
+
+# setando as variaveis de tempo iniciais
+tempo_inicial = time.localtime()
+horas_iniciais, minutos_inicio, seg_inicio = tempo_inicial[3], tempo_inicial[4], tempo_inicial[5]
+tempo_inicial_seg = horas_iniciais*60*60 + minutos_inicio * 60 + seg_inicio
+tempo = 0
+minutos = 0
+seg = 0
+
+while tempo <= tempo_simulacao:
+    a = tempo
+    tempo_final = time.localtime()
+    horas_finais, minutos_final, seg_final = tempo_final[3], tempo_final[4], tempo_final[5]
+    tempo = horas_finais*60*60 + minutos_final * 60 + seg_final - tempo_inicial_seg
+    if tempo > a:
+
+        n_40 = str(tempo / (40)).split('.')
+        n_120 = str(tempo / (120)).split('.')
+        n_2 = str(tempo / (20)).split('.')
+        n_60 = str(tempo / (60)).split('.')
+        n_1 = str(tempo / (1)).split('.')
+
+        seg = int(round(float(f'0.{n_60[1]}')*60,2))
+        seg_str = f'{seg}'
+        
+        minutos = int(n_60[0])
+
+        if seg < 10:
+            seg_str = f'0{seg}'
+        else:
+            seg_str = f'{seg}'
+        if minutos < 10:
+            minutos_str = f'0{minutos}'
+        else:
+            minutos_str = f'{minutos}'
+
+        print(f'{minutos_str}:{seg_str}')
+        pagina.update_acell('H3',f'{minutos_str}:{seg_str}')
+
+        if n_2[1] == '0':
+            vendas_pg = int(pagina.acell('J13').value)
+            vendas_pp = int(pagina.acell('H13').value)
+
+            estoque_pp = int(pagina.acell('L13').value)
+            estoque_pg = int(pagina.acell('O13').value)
+            
+            produção_pp = int(pagina.acell('D13').value)
+            produção_pg = int(pagina.acell('F13').value)
+
+            total_produção_pp = int(pagina.acell('G21').value)
+            total_produção_pg = int(pagina.acell('H21').value)
+
+            # botar a produção para o estoque de pg
+            if produção_pg > 0:
+                pagina.update_acell('O13', estoque_pg + produção_pg)
+                pagina.update_acell('F13', 0)
+                pagina.update_acell('H21', total_produção_pg + produção_pg)
+
+            # botar a produção para o estoque de pp
+            if produção_pp > 0:
+                pagina.update_acell('L13', estoque_pp + produção_pp)
+                pagina.update_acell('D13', 0)
+                pagina.update_acell('G21', total_produção_pp + produção_pp)
+
+        if n_40[1] == '0' and n_120[1] != '0':
+
+            lista_possiveis_pedidos = (1, 2, 3)
+            n_aleatorio = random.randint(1, 3)
+
+            if n_aleatorio == 1:
+                print('2pp')
+                pagina.update_acell('H13', 2)  # vendas
+                pagina.update_acell('J13', 0)
+                pagina.update_acell('L13', estoque_pp - 2)  # update do estoque
+
+
+            elif n_aleatorio == 2:
+                print('2pg')
+                pagina.update_acell('J13', 2)
+                pagina.update_acell('H13', 0)
+                pagina.update_acell('O13', estoque_pg - 2)
+
+
+            elif n_aleatorio == 3:
+                    print('1pp e 1pg')
+                    pagina.update_acell('J13', 1)
+                    pagina.update_acell('H13', 1)
+                    pagina.update_acell('O13', estoque_pg - 1)
+                    pagina.update_acell('L13', estoque_pp - 1)
+
+        if n_120[1] == '0':
+            n_aleatorio2 = random.randint(1, 2)
+
+            if n_aleatorio2 == 1:
+                print('1pg')
+                pagina.update_acell('J13', 1)
+                pagina.update_acell('H13', 0)
+                pagina.update_acell('O13', estoque_pg - 1)
+
+            elif n_aleatorio2 == 2:
+                print('1pp')
+                pagina.update_acell('H13', 1)
+                pagina.update_acell('J13', 0)
+                pagina.update_acell('L13', estoque_pp - 1)
+
+        if n_40[1] == '0':
+      
+            # total de vendas
+            #botando os valores de novo (vendas e estoque) pois foram atualizados nas condições anteriores
+            estoque_pp = int(pagina.acell('L13').value)
+            estoque_pg = int(pagina.acell('O13').value)
+
+            total_vendas_pp = int(pagina.acell('G22').value)
+            total_vendas_pg = int(pagina.acell('H22').value)
+            vendas_pg = int(pagina.acell('J13').value)
+            vendas_pp = int(pagina.acell('H13').value)
+            pagina.update_acell('G22', vendas_pp + total_vendas_pp)
+            pagina.update_acell('H22', vendas_pg + total_vendas_pg)
+
+            total_vendas_pp = int(pagina.acell('G22').value)
+            total_vendas_pg = int(pagina.acell('H22').value)
+
+
+            falta_pp = int(pagina.acell('M13').value)
+            falta_pg = int(pagina.acell('P13').value)
+
+            if estoque_pg < 0:
+                pagina.update_acell('P13', abs(estoque_pg) + falta_pg)
+                pagina.update_acell('O13', 0)
+
+            if estoque_pp < 0:
+                pagina.update_acell('M13', abs(estoque_pp) + falta_pp)
+                pagina.update_acell('L13', 0)
+                
+            # total de faltas
+            falta_pp = int(pagina.acell('M13').value)
+            falta_pg = int(pagina.acell('P13').value)
+            pagina.update_acell('G23', falta_pp)
+            pagina.update_acell('H23', falta_pg)
+            total_faltas_pp = int(pagina.acell('G23').value)
+            total_faltas_pg = int(pagina.acell('H23').value)
+
+
+            # atualizar nivel de serviço
+            try:
+              nivel_serviço_pp = (total_vendas_pp - total_faltas_pp) / total_vendas_pp
+              pagina.update_acell('G24', nivel_serviço_pp)
+            except Exception as e:
+              pass
+
+            try:
+              nivel_serviço_pg = (total_vendas_pg - total_faltas_pg) / total_vendas_pg
+              pagina.update_acell('H24', nivel_serviço_pg)
+            except Exception as e:
+              pass
+
+format_cell_range(
+        pagina, 'H3:J3',
+        cellFormat(backgroundColor=color(1, 0.0, 0.0), ) 
+        )
+
+
